@@ -230,6 +230,14 @@ def header(src, build_time, stat, proxy_group):
     )
 
 
+def strip_policy(line):
+    """rule-provider 的 payload 里不能带策略名，去掉它，保留 no-resolve 这类参数"""
+    p = line.split(",")
+    if p[0].startswith("IP-CIDR"):
+        return ",".join([p[0], p[1]] + p[3:])
+    return ",".join(p[:2])
+
+
 def write_rules_list(fh, rules_lines):
     fh.write("rules:\n")
     for line in rules_lines:
@@ -340,7 +348,7 @@ def main():
             with open(p, "w", encoding="utf-8") as f:
                 f.write("# %s rules, %d entries\npayload:\n" % (key, len(lines)))
                 for l in lines:
-                    f.write("  - '%s'\n" % l)
+                    f.write("  - '%s'\n" % strip_policy(l))
             print("[+] 已生成 %s (%d 条)" % (p, len(lines)))
 
         path = os.path.join(args.out, "config-providers.yaml")
