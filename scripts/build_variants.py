@@ -4,9 +4,8 @@
 build_variants.py —— 把上游 14 个变体一次性转成 Clash 规则包，供客户端自由挑选
 
 产物布局（--out 目录下）：
-    common/adblock.yaml        7 个「去广告」变体共用的广告规则（只存一份）
-    <变体id>/direct.yaml       该变体直连集合
-    <变体id>/proxy.yaml        该变体代理集合
+    common/adblock.yaml        所有「去广告」变体共用的广告规则（各变体集合一致时只存一份）
+    <变体id>/<片段名>.yaml      按上游原始顺序切出的连续同策略片段（direct / direct-2 / proxy ...）
     <变体id>/config.yaml       该变体的完整配置骨架
     rulesets/*.yaml            需要本地化的外部规则集（如 AI 列表）
     index.json                 变体清单：名称、分类、统计、订阅地址
@@ -24,10 +23,12 @@ import os
 import re
 import shutil
 import sys
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from sr2clash import parse_conf, fetch, DNS_BLOCK  # noqa: E402
+from sr2clash import build_dns_block, fetch, parse_conf, render_payload  # noqa: E402
+
+# 片段内规则数不超过该值时直接内联到 rules，避免生成过多小文件
+INLINE_CHUNK_LIMIT = 60
 
 # ---------------------------------------------------------------------------
 # 变体清单：id / 上游文件名 / 中文名 / 分类 / 一句话说明
@@ -60,7 +61,7 @@ VARIANTS = [
     ("lazy", "lazy.conf", "懒人配置", "懒人",
      "39 条粗粒度规则，不依赖任何外部规则集，体积最小。", False),
     ("lazy-group", "lazy_group.conf", "懒人配置（含策略组）", "懒人",
-     "39 条规则 + AI、流媒体、游戏平台、微软谷歌苹果等 18 个独立分流组。", False),
+     "39 条规则 + AI、流媒体、游戏平台、微软谷歌苹果等 17 个独立分流组。", False),
 ]
 
 # 自定义策略名 -> (显示名, 文件名 slug)
@@ -139,42 +140,51 @@ def rule_line(rtype, value, extra, policy=None):
     """拼一条 Clash 规则；policy 为 None 时用于 rule-provider 的 payload（不带策略）"""
     if rtype == "FINAL":
         return "MATCH,%s" % policy if policy else None
-    if rtype == "IP-CIDR":
-        t = "IP-CIDR6" if ":" in value else "IP-CIDR"
+    if rtype in ("IP-CIDR", "IP-CIDR6"):
+        t = "IP-CIDR6" if (rtype == "IP-CIDR6" or ":" in value) else "IP-CIDR"
         tail = ",".join(extra) if extra else "no-resolve"
         if policy:
             # Clash 要求策略在参数之前：IP-CIDR,网段,策略,no-resolve
             return "%s,%s,%s,%s" % (t, value, policy, tail)
         return "%s,%s,%s" % (t, value, tail)
-    if rtype in ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "PROCESS-NAME", "GEOIP"):
+    if rtype in ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX",
+                 "DOMAIN-WILDCARD", "PROCESS-NAME", "GEOIP"):
         head = "%s,%s" % (rtype, value)
         return head + ("," + policy if policy else "")
     return None
 
 
-def split_rules(rules, default_group):
-    """把规则分成：广告拦截 / 直连 / 代理 / 兜底段（GEOIP、RULE-SET、内网 IP、FINAL）"""
-    ad, direct, proxy = [], [], []
-    tail = []            # [(type, value, policy, extra)]
-    customs = set()
+def plan_rules(rules, default_group):
+    """按上游原始顺序规划输出。
+
+    连续且策略相同的域名/IP 规则合并成一个 chunk（可落成 rule-provider）；
+    GEOIP / RULE-SET / FINAL 以及自定义策略规则保持内联位置。
+    这样 Clash 的首条匹配结果才与 Shadowrocket 完全一致，不能先按策略分桶再拼接。
+    """
+    plan, dropped, customs = [], {}, set()
     for rtype, value, pol_raw, extra in rules:
         pol = canon_policy(pol_raw, default_group)
-        if pol == "REJECT":
-            ad.append((rtype, value, extra))
-        elif rtype in ("GEOIP", "RULE-SET", "FINAL"):
-            tail.append((rtype, value, pol, extra))
-            if rtype == "RULE-SET" and pol not in ("REJECT", "DIRECT", default_group):
-                customs.add(pol)
-        elif rtype.startswith("IP-CIDR") and pol == "DIRECT":
-            tail.append((rtype, value, pol, extra))      # 内网网段留到最后
-        elif pol == "DIRECT":
-            direct.append((rtype, value, extra))
-        elif pol == default_group:
-            proxy.append((rtype, value, extra))
-        else:
+        if pol not in ("REJECT", "DIRECT", default_group):
             customs.add(pol)
-            tail.append((rtype, value, pol, extra))      # 极少数自定义策略直接内联
-    return ad, direct, proxy, tail, customs
+        if rtype == "FINAL":
+            plan.append({"kind": "match", "policy": pol})
+        elif rtype == "RULE-SET":
+            plan.append({"kind": "ruleset", "url": value, "policy": pol})
+        elif rtype == "GEOIP":
+            plan.append({"kind": "inline", "text": rule_line(rtype, value, extra, pol)})
+        elif render_payload(rtype, value, extra) is not None \
+                and pol in ("REJECT", "DIRECT", default_group):
+            if plan and plan[-1]["kind"] == "chunk" and plan[-1]["policy"] == pol:
+                plan[-1]["entries"].append((rtype, value, extra))
+            else:
+                plan.append({"kind": "chunk", "policy": pol, "entries": [(rtype, value, extra)]})
+        else:
+            text = rule_line(rtype, value, extra, pol)
+            if text:
+                plan.append({"kind": "inline", "text": text})
+            else:
+                dropped[rtype] = dropped.get(rtype, 0) + 1
+    return plan, dropped, customs
 
 
 def dedupe(entries):
@@ -184,6 +194,18 @@ def dedupe(entries):
             seen.add(e)
             uniq.append(e)
     return uniq
+
+
+def chunk_payload(entries):
+    return dedupe([render_payload(*e) for e in entries])
+
+
+def chunk_slug(policy):
+    if policy == "REJECT":
+        return "adblock"
+    if policy == "DIRECT":
+        return "direct"
+    return "proxy"
 
 
 def write_set(path, entries, title):
@@ -228,10 +250,13 @@ def main():
     os.makedirs(os.path.join(args.out, "common"), exist_ok=True)
 
     wanted = set(args.variant) if args.variant else None
-    ad_block, ad_hash = None, None
-    set_registry = {}        # 内容哈希 -> 已写出的 URL，多个变体共用同一份
+    set_registry = {}          # provider 内容哈希 -> 已写出的 URL，多个变体共用同一份
+    fetched_rulesets = set()   # 本次构建已本地化过的规则集文件名
     index = {"variants": [], "common": {}}
     upstream_time = ""
+    ad_reference = None        # 首个含广告变体的 REJECT 集合（排序后），用于复用 common/adblock.yaml
+    ad_block_entries = None    # 首个含广告变体的广告 payload（保序），用于写 common 文件
+    common_ad_users = 0        # 实际引用 common/adblock.yaml 的变体数
 
     for vid, fname, cname, cat, desc, rec in VARIANTS:
         if wanted and vid not in wanted:
@@ -242,32 +267,45 @@ def main():
             continue
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             text = f.read()
-        rules, _general, btime, _ = parse_conf(text)
+        rules, general, btime, _ignored = parse_conf(text)
         if btime and not upstream_time:
             upstream_time = btime
         if not rules:
             print("[!] 跳过 %s：没解析到规则" % vid)
             continue
+        ipv6 = str(general.get("ipv6", "false")).strip().lower() == "true"
 
-        ad, direct, proxy, tail, customs = split_rules(rules, group)
+        plan, dropped, customs = plan_rules(rules, group)
+        for rtype, count in sorted(dropped.items()):
+            print("[!] %s：跳过 %d 条不支持的规则类型 %s" % (vid, count, rtype))
 
-        # 广告规则在所有变体间完全一致，只存一份
-        if ad:
-            h = hashlib.sha256(repr(sorted(ad)).encode()).hexdigest()[:16]
-            if ad_block is None:
-                ad_block, ad_hash = ad, h
-            elif h != ad_hash:
-                print("[!] %s 的广告规则与首个变体不一致（%s != %s），将单独成文件" % (vid, h[:8], ad_hash[:8]))
+        # 统计（与旧版口径保持一致：DIRECT 不含 IP 规则；GEOIP / RULE-SET / FINAL 不计入三类）
+        reject = direct = proxy = 0
+        for item in plan:
+            if item["kind"] != "chunk":
+                continue
+            if item["policy"] == "REJECT":
+                reject += len(item["entries"])
+            elif item["policy"] == "DIRECT":
+                direct += sum(1 for e in item["entries"] if not e[0].upper().startswith("IP-CIDR"))
+            else:
+                proxy += len(item["entries"])
+
+        ad_entries_this = dedupe(
+            render_payload(*e)
+            for item in plan if item["kind"] == "chunk" and item["policy"] == "REJECT"
+            for e in item["entries"])
+        if ad_entries_this:
+            if ad_reference is None:
+                ad_reference = sorted(ad_entries_this)
+                ad_block_entries = ad_entries_this
+            elif sorted(ad_entries_this) != ad_reference:
+                print("[i] %s 的广告集合与首个变体不同，将使用该变体自己的 provider" % vid)
 
         vdir = os.path.join(args.out, vid)
         os.makedirs(vdir, exist_ok=True)
-        has_ad = bool(ad)
-        # 规则很少的变体直接内联，不折腾 provider
-        inline_rest = (len(direct) + len(proxy)) <= 60
-
         providers, rules_out = [], []
-
-        used_names = set()
+        used_names, url_names = set(), {}
 
         def uniq(name):
             n, i = name, 2
@@ -277,99 +315,126 @@ def main():
             used_names.add(n)
             return n
 
-        def add_provider(name, entries, title):
+        def register_provider(name, url):
+            if url in url_names:
+                return url_names[url]
             name = uniq(name)
-            entries = dedupe(entries)
-            key = hashlib.sha256("\n".join(entries).encode()).hexdigest()
-            if key in set_registry:
-                providers.append((name, set_registry[key]))   # 内容一致，复用已有文件
-                return
-            write_set(os.path.join(vdir, name + ".yaml"), entries, title)
-            url = "%s/%s/%s.yaml" % (base, vid, name)
+            providers.append((name, url))
+            url_names[url] = name
+            return name
+
+        def add_chunk(policy, payload, title):
+            key = hashlib.sha256("\n".join(payload).encode()).hexdigest()
+            if key in set_registry:                 # 内容一致，复用别的变体已写出的文件
+                return register_provider(chunk_slug(policy), set_registry[key])
+            name = uniq(chunk_slug(policy))
+            fn = name + ".yaml"
+            write_set(os.path.join(vdir, fn), payload, title)
+            url = "%s/%s/%s" % (base, vid, fn)
             set_registry[key] = url
             providers.append((name, url))
+            url_names[url] = name
+            return name
 
-        if has_ad:
-            providers.append(("sr-adblock", "%s/common/adblock.yaml" % base))
-        if not inline_rest and direct:
-            add_provider("direct", [rule_line(*e) for e in direct], "%s 直连集合" % cname)
-        if not inline_rest and proxy:
-            add_provider("proxy", [rule_line(*e) for e in proxy], "%s 代理集合" % cname)
+        def use_common_ad():
+            url = "%s/common/adblock.yaml" % base
+            if url in url_names:
+                return url_names[url]
+            name = uniq("sr-adblock")
+            providers.append((name, url))
+            url_names[url] = name
+            return name
 
-        # 兜底段：GEOIP / 内网 IP / RULE-SET / MATCH，保持上游先后顺序
-        seen_rs = set()
-        for rtype, value, pol, extra in tail:
-            if rtype == "RULE-SET":
-                curl = clash_ruleset_url(value)
-                slug = ruleset_slug(value, len(providers))
-                if curl:
-                    providers.append((uniq("rs-" + slug), curl))
+        for item in plan:
+            if item["kind"] == "chunk":
+                policy = item["policy"]
+                payload = chunk_payload(item["entries"])
+                if policy == "REJECT" and ad_reference is not None \
+                        and sorted(payload) == ad_reference:
+                    name = use_common_ad()
+                    rules_out.append("RULE-SET,%s,REJECT" % name)
+                elif len(item["entries"]) <= INLINE_CHUNK_LIMIT:
+                    for e in item["entries"]:
+                        line = rule_line(*e, policy)
+                        if line:
+                            rules_out.append(line)
                 else:
-                    # 非 mihomo 格式的清单，构建时抓下来本地化
-                    local = os.path.join(args.out, "rulesets")
-                    os.makedirs(local, exist_ok=True)
-                    fn = "rs-%s.yaml" % slug
-                    fp = os.path.join(local, fn)
-                    if not os.path.exists(fp):
-                        try:
-                            body = fetch(value)
-                            items = []
-                            for line in body.splitlines():
-                                s = line.strip()
-                                if not s or s.startswith("#"):
-                                    continue
-                                parts = [x.strip() for x in s.split(",")]
-                                ln = rule_line(parts[0].upper(), parts[1], parts[2:]) if len(parts) >= 2 else None
-                                if ln:
-                                    items.append(ln)
-                            write_set(fp, items, "%s（本地化）" % slug)
-                            print("    · 本地化规则集 %s <- %s（%d 条）" % (fn, value, len(items)))
-                        except Exception as e:      # noqa: BLE001
-                            print("    ! 抓取失败 %s: %s" % (value, e))
-                            continue
-                    providers.append((uniq("rs-" + slug), "%s/rulesets/%s" % (base, fn)))
-                rules_out.append("RULE-SET,%s,%s" % (providers[-1][0], pol))
-            elif rtype == "FINAL":
-                rules_out.append("MATCH,%s" % pol)
+                    name = add_chunk(policy, payload, "%s %s 规则" % (cname, chunk_slug(policy)))
+                    rules_out.append("RULE-SET,%s,%s" % (name, policy))
+            elif item["kind"] == "match":
+                rules_out.append("MATCH,%s" % item["policy"])
+            elif item["kind"] == "ruleset":
+                url = item["url"]
+                curl = clash_ruleset_url(url)
+                slug = ruleset_slug(url, len(providers))
+                if curl:
+                    name = register_provider("rs-" + slug, curl)
+                    rules_out.append("RULE-SET,%s,%s" % (name, item["policy"]))
+                    continue
+                # 非 mihomo 格式的清单，构建时抓下来本地化
+                local_dir = os.path.join(args.out, "rulesets")
+                os.makedirs(local_dir, exist_ok=True)
+                fn = "rs-%s.yaml" % slug
+                fp = os.path.join(local_dir, fn)
+                if fn not in fetched_rulesets:
+                    try:
+                        body = fetch(url)
+                        items, ldropped = [], {}
+                        for line in body.splitlines():
+                            s = line.strip()
+                            if not s or s.startswith("#"):
+                                continue
+                            parts = [x.strip() for x in s.split(",")]
+                            if len(parts) < 2:
+                                continue
+                            extra = [x for x in parts[2:] if x in ("no-resolve", "src")]
+                            ln = render_payload(parts[0].upper(), parts[1], extra)
+                            if ln:
+                                items.append(ln)
+                            else:
+                                t = parts[0].upper()
+                                ldropped[t] = ldropped.get(t, 0) + 1
+                        write_set(fp, items, "%s（本地化）" % slug)
+                        fetched_rulesets.add(fn)
+                        print("    · 本地化规则集 %s <- %s（%d 条）" % (fn, url, len(items)))
+                        for t, n in sorted(ldropped.items()):
+                            print("    ! 跳过 %d 条不支持的规则类型: %s" % (n, t))
+                    except Exception as e:          # noqa: BLE001
+                        print("    ! 抓取失败 %s: %s" % (url, e))
+                        continue
+                name = register_provider("rs-" + slug, "%s/rulesets/%s" % (base, fn))
+                rules_out.append("RULE-SET,%s,%s" % (name, item["policy"]))
             else:
-                rules_out.append(rule_line(rtype, value, extra, pol))
+                rules_out.append(item["text"])
 
-        # 组装 rules
-        rules_final = []
-        if has_ad:
-            rules_final.append("RULE-SET,sr-adblock,REJECT")
-        if not inline_rest:
-            if direct:
-                rules_final.append("RULE-SET,direct,DIRECT")
-            if proxy:
-                rules_final.append("RULE-SET,proxy,%s" % group)
-        else:
-            rules_final += [rule_line(*e, "DIRECT") for e in direct]
-            rules_final += [rule_line(*e, group) for e in proxy]
-        rules_final += rules_out
-        if not any(r.startswith("MATCH,") for r in rules_final):
-            rules_final.append("MATCH,DIRECT")      # 上游 ad_only 没有兜底规则
+        if not any(r.startswith("MATCH,") for r in rules_out):
+            rules_out.append("MATCH,DIRECT")        # 上游 ad_only 没有兜底规则
+
+        common_url = "%s/common/adblock.yaml" % base
+        if any(url == common_url for _name, url in providers):
+            common_ad_users += 1
 
         custom_groups = sorted(customs)
+        other = sum(1 for r in rules_out if not r.startswith("RULE-SET,"))
         cfg = []
         cfg.append("# ============================================================")
         cfg.append("# %s（变体 id: %s）" % (cname, vid))
         cfg.append("# %s" % desc)
         cfg.append("# 上游: %s   构建时间: %s" % (fname, upstream_time or "unknown"))
         cfg.append("# 规则: REJECT %d / DIRECT %d / 代理 %d / 其他 %d"
-                   % (len(ad), len(direct), len(proxy), len(tail)))
+                   % (reject, direct, proxy, other))
         cfg.append("# ============================================================")
         cfg.append("")
         cfg.append("mixed-port: 7890")
         cfg.append("allow-lan: false")
         cfg.append("mode: rule")
         cfg.append("log-level: info")
-        cfg.append("ipv6: false")
+        cfg.append("ipv6: %s" % ("true" if ipv6 else "false"))
         cfg.append("tcp-concurrent: true")
         cfg.append("unified-delay: true")
         cfg.append("external-controller: 127.0.0.1:9090")
         cfg.append("")
-        cfg.append(DNS_BLOCK)
+        cfg.append(build_dns_block(ipv6))
         cfg.append(PLACEHOLDER_PROXY)
         cfg.append(build_groups(group, custom_groups))
         cfg.append("rule-providers:")
@@ -379,11 +444,12 @@ def main():
             cfg.append("    behavior: classical")
             cfg.append("    format: yaml")
             cfg.append("    url: %s" % url)
-            cfg.append("    path: ./ruleset/%s.yaml" % name)
+            # provider 缓存路径带上变体 id，避免切换变体时复用同名旧缓存
+            cfg.append("    path: ./ruleset/%s-%s.yaml" % (vid, name))
             cfg.append("    interval: 86400")
         cfg.append("")
         cfg.append("rules:")
-        for r in rules_final:
+        for r in rules_out:
             cfg.append("  - %s" % r)
 
         with open(os.path.join(vdir, "config.yaml"), "w", encoding="utf-8") as f:
@@ -396,27 +462,26 @@ def main():
             "description": desc,
             "recommended": rec,
             "upstream_file": fname,
-            "stats": {"reject": len(ad), "direct": len(direct), "proxy": len(proxy),
-                      "custom_groups": len(custom_groups), "total_rules": len(rules_final)},
+            "stats": {"reject": reject, "direct": direct, "proxy": proxy,
+                      "custom_groups": len(custom_groups), "total_rules": len(rules_out)},
             "config_url": "%s/%s/config.yaml" % (base, vid),
             "providers": {n: u for n, u in providers},
         })
         print("[%s] %-14s REJECT %-6d DIRECT %-5d PROXY %-5d 自定义组 %d -> %d 条规则"
-              % ("★" if rec else " ", vid, len(ad), len(direct), len(proxy), len(custom_groups), len(rules_final)))
+              % ("★" if rec else " ", vid, reject, direct, proxy, len(custom_groups), len(rules_out)))
 
     # 共享广告规则
-    if ad_block:
-        entries = dedupe([rule_line(*e) for e in ad_block])
-        write_set(os.path.join(args.out, "common", "adblock.yaml"), entries,
-                  "广告拦截规则（%d 个变体共用）" % sum(1 for v in index["variants"] if v["stats"]["reject"]))
+    if ad_block_entries:
+        write_set(os.path.join(args.out, "common", "adblock.yaml"), ad_block_entries,
+                  "广告拦截规则（各含广告变体共用）")
         index["common"]["adblock"] = {
             "path": "common/adblock.yaml",
-            "entries": len(entries),
+            "entries": len(dedupe(ad_block_entries)),
             "url": "%s/common/adblock.yaml" % base,
             "bytes": os.path.getsize(os.path.join(args.out, "common", "adblock.yaml")),
         }
         print("[common] adblock %d 条（%d 个变体共用这一份）"
-              % (len(entries), sum(1 for v in index["variants"] if v["stats"]["reject"])))
+              % (len(dedupe(ad_block_entries)), common_ad_users))
 
     # 根目录再放一份默认配置（白名单+去广告），只想接一个地址的人直接用
     default_cfg = os.path.join(args.out, "whitelist-ad", "config.yaml")
@@ -425,8 +490,6 @@ def main():
         print("[+] 根目录 config.yaml = whitelist-ad（默认推荐）")
 
     index["upstream_build_time"] = upstream_time
-    index["generated_at"] = __import__("datetime").datetime.now(
-        __import__("datetime").timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     with open(os.path.join(args.out, "index.json"), "w", encoding="utf-8") as f:
         json.dump(index, f, ensure_ascii=False, indent=2)
     print("[+] index.json 已生成（%d 个变体）" % len(index["variants"]))

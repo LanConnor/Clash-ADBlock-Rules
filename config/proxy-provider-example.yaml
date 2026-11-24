@@ -5,6 +5,7 @@
 # 这样「节点」和「规则」两条线都自动更新，客户端里只加一个地址就够。
 #
 # 前提：你的订阅要是 Clash 格式（一般加 ?flag=clash 或 /clash 后缀）。
+# Shadowrocket 的 ss:// base64 订阅不是 Clash 格式，proxy-providers 拉不了。
 # 拿不到 Clash 格式就退回方案 A。
 # ============================================================
 
@@ -65,6 +66,7 @@ proxy-groups:
     tolerance: 50
 
 # 规则集地址：把 LanConnor/Clash-ADBlock-Rules 换成你的仓库
+# 规则顺序必须和这里一致：上游的 direct / proxy 是交错的，不能自行合并片段
 rule-providers:
   sr-adblock:
     type: http
@@ -87,11 +89,26 @@ rule-providers:
     url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml
     path: ./ruleset/sr-proxy.yaml
     interval: 86400
+  sr-direct-2:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct-2.yaml
+    path: ./ruleset/sr-direct-2.yaml
+    interval: 86400
+  sr-applenews:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml
+    path: ./ruleset/sr-applenews.yaml
+    interval: 86400
 
 rules:
   - RULE-SET,sr-adblock,REJECT
   - RULE-SET,sr-direct,DIRECT
   - RULE-SET,sr-proxy,🚀 代理
+  - RULE-SET,sr-direct-2,DIRECT
   - GEOIP,CN,DIRECT
   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
@@ -100,4 +117,5 @@ rules:
   - IP-CIDR6,fe80::/10,DIRECT,no-resolve
   - IP-CIDR6,fc00::/7,DIRECT,no-resolve
   - IP-CIDR6,::1/128,DIRECT,no-resolve
+  - RULE-SET,sr-applenews,🚀 代理
   - MATCH,🚀 代理

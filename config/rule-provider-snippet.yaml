@@ -1,7 +1,10 @@
 # ============================================================
 # 方案 A（推荐）：把这段粘进你自己的 Clash 配置
 # 只加一次，之后规则每天自动更新，节点完全不用动
-# 示例用的是「白名单 + 去广告」变体；换成别的变体只需改 direct/proxy 两行的路径
+#
+# 示例用的是「白名单 + 去广告」变体（whitelist-ad）。换别的变体时，
+# 按 dist/index.json 里该变体的 providers 和 config.yaml 的 rules 顺序替换。
+# 不同变体的片段数量不同，例如 banlist-ad 是 proxy / proxy-2 两段。
 # 可用变体见 https://github.com/LanConnor/Clash-ADBlock-Rules#变体一览
 # ============================================================
 
@@ -28,13 +31,29 @@ rule-providers:
     url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml
     path: ./ruleset/sr-proxy.yaml
     interval: 86400
+  sr-direct-2:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct-2.yaml
+    path: ./ruleset/sr-direct-2.yaml
+    interval: 86400
+  sr-applenews:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml
+    path: ./ruleset/sr-applenews.yaml
+    interval: 86400
 
-# 2) 把 rules 段换成下面这些（顺序不能变）
+# 2) 把 rules 段换成下面这些（顺序不能变：上游的 direct / proxy 是交错的，
+#    按策略重新分组会改变首条匹配结果）
 #    代理组名如果不是「🚀 代理」，改成你自己配置里的组名
 rules:
   - RULE-SET,sr-adblock,REJECT
   - RULE-SET,sr-direct,DIRECT
   - RULE-SET,sr-proxy,🚀 代理
+  - RULE-SET,sr-direct-2,DIRECT
   - GEOIP,CN,DIRECT
   - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
   - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
@@ -43,4 +62,5 @@ rules:
   - IP-CIDR6,fe80::/10,DIRECT,no-resolve
   - IP-CIDR6,fc00::/7,DIRECT,no-resolve
   - IP-CIDR6,::1/128,DIRECT,no-resolve
+  - RULE-SET,sr-applenews,🚀 代理
   - MATCH,🚀 代理

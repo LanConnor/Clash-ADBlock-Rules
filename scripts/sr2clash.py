@@ -20,7 +20,7 @@ sr2clash.py —— 把 Shadowrocket / Surge 风格的 .conf 分流规则转换�
     out/config.yaml          完整可用配置（规则内联，单文件，手机端最稳）
     out/rules-only.yaml      只有 rules: 列表，粘到自己已有的配置里用
     --mode provider 额外产出:
-    out/providers/adblock.yaml / direct.yaml / proxy.yaml
+    out/providers/<策略>-<序号>.yaml   按上游原始顺序切分的连续同策略片段
     out/config-providers.yaml
 """
 
@@ -59,7 +59,11 @@ def fetch(url):
 
 
 def parse_conf(text):
-    """返回 (rules, general, build_time, ignored) —— rules 为 [(类型, 值, 原始策略)] 保序"""
+    """返回 (rules, general, build_time, ignored)。
+
+    rules 为 [(类型, 值, 原始策略, 参数列表)]，严格保持上游顺序。
+    策略固定取第 3 列，no-resolve 等参数放在后面，避免把参数误当策略。
+    """
     rules, general, ignored = [], {}, []
     section = None
     build_time = ""
@@ -79,15 +83,20 @@ def parse_conf(text):
             continue
         if section != "rule":
             continue
+        # 去掉行尾注释（例如 "Proxy # Google AMP issue#237"），
+        # 要求 # 前有空白，避免把 URL 里的 # 也当成注释
+        s = re.sub(r"\s+#.*$", "", s).strip()
+        if not s:
+            continue
         parts = [x.strip() for x in s.split(",")]
-        if len(parts) == 2 and parts[0].upper() == "FINAL":   # FINAL,PROXY
+        rtype = parts[0].upper()
+        if len(parts) == 2 and rtype in ("FINAL", "MATCH"):
             rules.append(("FINAL", "", parts[1], []))
             continue
         if len(parts) < 3:
+            ignored.append(s)
             continue
-        rtype, value, policy = parts[0].upper(), parts[1], parts[-1]
-        extra = [x.strip() for x in parts[2:-1]]  # 例如 no-resolve
-        rules.append((rtype, value, policy, extra))
+        rules.append((rtype, parts[1], parts[2], parts[3:]))
     return rules, general, build_time, ignored
 
 
@@ -98,12 +107,13 @@ def to_clash_rule(rule, proxy_group):
     rtype, value, policy, extra = rule
     pol = map_policy(policy, proxy_group)
 
-    if rtype in ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "PROCESS-NAME"):
+    if rtype in ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX",
+                 "DOMAIN-WILDCARD", "PROCESS-NAME"):
         return "DOMAIN,%s,%s" % (value, pol) if rtype == "DOMAIN" else "%s,%s,%s" % (rtype, value, pol)
 
-    if rtype == "IP-CIDR":
+    if rtype in ("IP-CIDR", "IP-CIDR6"):
         # Clash 要求 IPv6 用 IP-CIDR6；同时补 no-resolve 避免域名走 IP 规则时白做 DNS
-        t = "IP-CIDR6" if ":" in value else "IP-CIDR"
+        t = "IP-CIDR6" if (rtype == "IP-CIDR6" or ":" in value) else "IP-CIDR"
         tail = ",".join(extra) if extra else "no-resolve"
         return "%s,%s,%s,%s" % (t, value, pol, tail)
 
@@ -117,6 +127,18 @@ def to_clash_rule(rule, proxy_group):
         # Shadowrocket 用远程 .list，Clash 需要远程 rule-provider，这里转成 provider 引用
         return "RULE-SET,%s,%s" % (ruleset_name(value), pol)
 
+    return None
+
+
+def render_payload(rtype, value, extra):
+    """渲染 rule-provider payload 里的一条规则（不带策略）。返回 None 表示类型不支持。"""
+    if rtype in ("IP-CIDR", "IP-CIDR6"):
+        t = "IP-CIDR6" if (rtype == "IP-CIDR6" or ":" in value) else "IP-CIDR"
+        tail = ",".join(extra) if extra else "no-resolve"
+        return "%s,%s,%s" % (t, value, tail)
+    if rtype in ("DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "DOMAIN-REGEX",
+                 "DOMAIN-WILDCARD", "PROCESS-NAME", "GEOIP"):
+        return "%s,%s" % (rtype, value)
     return None
 
 
@@ -144,9 +166,11 @@ def clash_url_for_ruleset(url):
 def build_rules(rules, proxy_group, dedupe=True):
     out, seen, providers = [], set(), {}
     stat = {"REJECT": 0, "DIRECT": 0, "PROXY": 0}
+    dropped = {}
     for r in rules:
         line = to_clash_rule(r, proxy_group)
         if not line:
+            dropped[r[0]] = dropped.get(r[0], 0) + 1
             continue
         if r[0] == "RULE-SET":
             url = r[1]
@@ -158,12 +182,59 @@ def build_rules(rules, proxy_group, dedupe=True):
         out.append(line)
         pol = map_policy(r[2], proxy_group)
         stat["REJECT" if pol == "REJECT" else ("DIRECT" if pol == "DIRECT" else "PROXY")] += 1
-    return out, providers, stat
+    return out, providers, stat, dropped
 
 
-DNS_BLOCK = """dns:
+def dedupe_lines(lines):
+    seen, out = set(), []
+    for line in lines:
+        if line and line not in seen:
+            seen.add(line)
+            out.append(line)
+    return out
+
+
+def chunk_slug(policy):
+    if policy == "REJECT":
+        return "adblock"
+    if policy == "DIRECT":
+        return "direct"
+    return "proxy"
+
+
+def plan_provider_chunks(rules, proxy_group):
+    """按上游原始顺序规划输出。
+
+    连续且策略相同的域名/IP 规则合并成一个 chunk（落成独立 provider）；
+    GEOIP / RULE-SET / FINAL 以及自定义策略规则保持内联位置。
+    不能先按策略分桶再拼接，否则 direct / proxy 交错的文件会改变首条匹配结果。
+    """
+    plan, dropped = [], {}
+    for rule in rules:
+        rtype, value, pol_raw, extra = rule
+        pol = map_policy(pol_raw, proxy_group)
+        if rtype == "FINAL":
+            plan.append({"kind": "inline", "text": "MATCH,%s" % pol})
+        elif rtype == "RULE-SET":
+            plan.append({"kind": "ruleset", "url": value, "policy": pol})
+        elif rtype != "GEOIP" and pol in ("REJECT", "DIRECT", proxy_group) \
+                and render_payload(rtype, value, extra) is not None:
+            if plan and plan[-1]["kind"] == "chunk" and plan[-1]["policy"] == pol:
+                plan[-1]["entries"].append((rtype, value, extra))
+            else:
+                plan.append({"kind": "chunk", "policy": pol, "entries": [(rtype, value, extra)]})
+        else:
+            text = to_clash_rule(rule, proxy_group)
+            if text:
+                plan.append({"kind": "inline", "text": text})
+            else:
+                dropped[rtype] = dropped.get(rtype, 0) + 1
+    return plan, dropped
+
+
+DNS_BLOCK_TEMPLATE = """dns:
   enable: true
-  ipv6: false
+  ipv6: {ipv6}
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
   fake-ip-filter:
@@ -188,6 +259,14 @@ DNS_BLOCK = """dns:
     geoip: true
     geoip-code: CN
 """
+
+
+def build_dns_block(ipv6=False):
+    """生成 DNS 段，ipv6 与上游 [General] 的 ipv6 开关保持一致。"""
+    return DNS_BLOCK_TEMPLATE.format(ipv6="true" if ipv6 else "false")
+
+
+DNS_BLOCK = build_dns_block(False)
 
 PROXIES_BLOCK = """proxies:
   # ↓↓↓ 这里换成你自己的节点（也可以用订阅转换后只保留 rules 段） ↓↓↓
@@ -230,14 +309,6 @@ def header(src, build_time, stat, proxy_group):
     )
 
 
-def strip_policy(line):
-    """rule-provider 的 payload 里不能带策略名，去掉它，保留 no-resolve 这类参数"""
-    p = line.split(",")
-    if p[0].startswith("IP-CIDR"):
-        return ",".join([p[0], p[1]] + p[3:])
-    return ",".join(p[:2])
-
-
 def write_rules_list(fh, rules_lines):
     fh.write("rules:\n")
     for line in rules_lines:
@@ -268,13 +339,17 @@ def main():
     else:
         ap.error("必须指定 -i 或 -u")
 
-    rules, general, build_time, _ = parse_conf(text)
+    rules, general, build_time, _ignored = parse_conf(text)
     if not rules:
         sys.exit("[!] 没解析到任何规则，检查文件是否为 [Rule] 格式的 .conf")
 
-    rules_lines, providers, stat = build_rules(rules, args.group, dedupe=not args.no_dedupe)
+    ipv6 = str(general.get("ipv6", "false")).strip().lower() == "true"
+
+    rules_lines, providers, stat, dropped = build_rules(rules, args.group, dedupe=not args.no_dedupe)
     print("[*] 解析到 %d 条规则，去重后 %d 条 (REJECT=%d DIRECT=%d 代理=%d)"
           % (len(rules), len(rules_lines), stat["REJECT"], stat["DIRECT"], stat["PROXY"]))
+    for rtype, count in sorted(dropped.items()):
+        print("[!] 跳过 %d 条不支持的规则类型: %s" % (count, rtype))
 
     os.makedirs(args.out, exist_ok=True)
     hdr = header(src, build_time or "unknown", stat, args.group)
@@ -284,9 +359,10 @@ def main():
         with open(path, "w", encoding="utf-8") as f:
             f.write(hdr)
             f.write("\nmixed-port: 7890\nallow-lan: false\nmode: rule\nlog-level: info\n")
-            f.write("ipv6: false\ntcp-concurrent: true\nunified-delay: true\n")
+            f.write("ipv6: %s\ntcp-concurrent: true\nunified-delay: true\n"
+                    % ("true" if ipv6 else "false"))
             f.write("external-controller: 127.0.0.1:9090\n\n")
-            f.write(DNS_BLOCK)
+            f.write(build_dns_block(ipv6))
             f.write("\n" + PROXIES_BLOCK + "\n")
             f.write(groups_block(args.group, ["占位节点"]) + "\n")
             if providers:
@@ -314,70 +390,72 @@ def main():
         print("[+] 已生成 %s (%.1f KB)" % (path2, os.path.getsize(path2) / 1024))
 
     else:
-        # provider 模式：按策略拆成 3 个 provider（域名 + IP 规则都进桶）。
-        # GEOIP / RULE-SET / MATCH 以及末尾的内网 IP-CIDR 留在主配置里，保持原始先后顺序。
-        # 已校验源文件中 direct 与 proxy 两个集合无同域重叠，因此桶内顺序不影响结果。
+        # provider 模式：按上游原始顺序，把连续的同策略规则切成片段，逐段生成 provider。
+        # 不能按策略分桶后重新拼接，否则 direct / proxy 交错的文件会改变首条匹配结果。
         pdir = os.path.join(args.out, "providers")
         os.makedirs(pdir, exist_ok=True)
-        buckets = {"adblock": [], "direct": [], "proxy": []}
-        inline_tail = []
-        seen_key = set()
-        conflicts = 0
-        for l in rules_lines:
-            if l.startswith(("GEOIP", "RULE-SET", "MATCH")):
-                inline_tail.append(l)
-                continue
-            parts = l.split(",")
-            if l.startswith("IP-CIDR") and len(parts) > 2 and parts[2] == "DIRECT":
-                inline_tail.append(l)      # 内网网段，留到最后
-                continue
-            # 同一域名可能同时被标成代理和直连（上游数据冲突）。
-            # 原文件靠先匹配先生效，拆桶后顺序会变，所以这里按"首次出现的策略"裁决。
-            key = parts[0] + "," + parts[1]
-            if key in seen_key:
-                conflicts += 1
-                continue
-            seen_key.add(key)
-            pol = parts[2] if len(parts) > 2 else "REJECT"
-            key2 = "adblock" if pol == "REJECT" else ("direct" if pol == "DIRECT" else "proxy")
-            buckets[key2].append(l)
-        if conflicts:
-            print("[i] provider 模式：%d 条重复域名已按首次匹配优先原则去冲突" % conflicts)
-        for key, lines in buckets.items():
-            p = os.path.join(pdir, key + ".yaml")
-            with open(p, "w", encoding="utf-8") as f:
-                f.write("# %s rules, %d entries\npayload:\n" % (key, len(lines)))
-                for l in lines:
-                    f.write("  - '%s'\n" % strip_policy(l))
-            print("[+] 已生成 %s (%d 条)" % (p, len(lines)))
+        plan, dropped = plan_provider_chunks(rules, args.group)
+        for rtype, count in sorted(dropped.items()):
+            print("[!] 跳过 %d 条不支持的规则类型: %s" % (count, rtype))
+
+        provider_defs = []       # [(name, url)]，url 为远程地址或本地产物文件名
+        rules_out = []
+        used_names = set()
+        chunk_counts = {}
+
+        def uniq(name):
+            n, i = name, 2
+            while n in used_names:
+                n = "%s-%d" % (name, i)
+                i += 1
+            used_names.add(n)
+            return n
+
+        for item in plan:
+            if item["kind"] == "chunk":
+                slug = chunk_slug(item["policy"])
+                chunk_counts[slug] = chunk_counts.get(slug, 0) + 1
+                name = uniq("%s-%d" % (slug, chunk_counts[slug]))
+                fn = name + ".yaml"
+                payload = dedupe_lines([render_payload(*e) for e in item["entries"]])
+                with open(os.path.join(pdir, fn), "w", encoding="utf-8") as f:
+                    f.write("# %s rules, %d entries\npayload:\n" % (name, len(payload)))
+                    for line in payload:
+                        f.write("  - '%s'\n" % line)
+                provider_defs.append((name, fn))
+                rules_out.append("RULE-SET,%s,%s" % (name, item["policy"]))
+                print("[+] 已生成 %s (%d 条)" % (os.path.join(pdir, fn), len(payload)))
+            elif item["kind"] == "ruleset":
+                name = uniq(ruleset_name(item["url"]))
+                provider_defs.append((name, clash_url_for_ruleset(item["url"])))
+                rules_out.append("RULE-SET,%s,%s" % (name, item["policy"]))
+            else:
+                rules_out.append(item["text"])
 
         path = os.path.join(args.out, "config-providers.yaml")
         with open(path, "w", encoding="utf-8") as f:
             f.write(hdr)
             f.write("\nmixed-port: 7890\nallow-lan: false\nmode: rule\nlog-level: info\n")
-            f.write("ipv6: false\ntcp-concurrent: true\nunified-delay: true\n")
+            f.write("ipv6: %s\ntcp-concurrent: true\nunified-delay: true\n"
+                    % ("true" if ipv6 else "false"))
             f.write("external-controller: 127.0.0.1:9090\n\n")
-            f.write(DNS_BLOCK + "\n" + PROXIES_BLOCK + "\n")
+            f.write(build_dns_block(ipv6) + "\n" + PROXIES_BLOCK + "\n")
             f.write(groups_block(args.group, ["占位节点"]) + "\n")
             f.write("rule-providers:\n")
-            for key in ("adblock", "direct", "proxy"):
-                if args.remote_base:
-                    f.write("  %s:\n    type: http\n    behavior: classical\n    format: yaml\n"
-                            "    url: %s/providers/%s.yaml\n"
-                            "    path: ./ruleset/%s.yaml\n    interval: 86400\n"
-                            % (key, args.remote_base.rstrip("/"), key, key))
-                else:
-                    f.write("  %s:\n    type: file\n    behavior: classical\n    format: yaml\n"
-                            "    path: ./providers/%s.yaml\n" % (key, key))
-            for name, url in providers.items():
-                f.write("  %s:\n    type: http\n    behavior: classical\n    url: %s\n"
-                        "    path: ./ruleset/%s.yaml\n    interval: 86400\n" % (name, url, name))
+            for name, target in provider_defs:
+                if not target.startswith("http"):
+                    if args.remote_base:
+                        target = "%s/providers/%s" % (args.remote_base.rstrip("/"), target)
+                    else:
+                        f.write("  %s:\n    type: file\n    behavior: classical\n    format: yaml\n"
+                                "    path: ./providers/%s\n" % (name, target))
+                        continue
+                f.write("  %s:\n    type: http\n    behavior: classical\n    format: yaml\n"
+                        "    url: %s\n    path: ./ruleset/%s.yaml\n    interval: 86400\n"
+                        % (name, target, name))
             f.write("\nrules:\n")
-            f.write("  - RULE-SET,adblock,REJECT\n")
-            f.write("  - RULE-SET,direct,DIRECT\n")
-            f.write("  - RULE-SET,proxy,%s\n" % args.group)
-            for l in inline_tail:
-                f.write("  - %s\n" % l)
+            for line in rules_out:
+                f.write("  - %s\n" % line)
         print("[+] 已生成 %s (%.1f KB)" % (path, os.path.getsize(path) / 1024))
 
 

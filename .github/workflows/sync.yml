@@ -72,7 +72,8 @@ jobs:
             --remote-base "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist"
           python scripts/meta.py build
           pip install --quiet pyyaml
-          python scripts/validate.py build
+          # 第二个参数 confs 让体检额外逐变体校验「首条匹配」与上游是否一致
+          python scripts/validate.py build confs
           echo "产物 $(du -sh build | cut -f1)"
 
       - name: 比对线上版本
