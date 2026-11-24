@@ -70,21 +70,21 @@ rule-providers:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/adblock.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml
     path: ./ruleset/sr-adblock.yaml
     interval: 86400
   sr-direct:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/direct.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct.yaml
     path: ./ruleset/sr-direct.yaml
     interval: 86400
   sr-proxy:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/proxy.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml
     path: ./ruleset/sr-proxy.yaml
     interval: 86400
 

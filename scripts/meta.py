@@ -1,58 +1,59 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成 dist/meta.json：记录上游构建时间、各 provider 的条目数与校验和。
+"""生成 dist/meta.json：构建时间、文件清单、内容指纹。
 
-客户端/脚本可以拿它判断规则有没有更新，不用每次都拉 1MB 的列表去比对。
+content_hash 是对所有产物内容算的合并指纹，工作流拿它判断
+「这次构建和线上那份有没有区别」，没变化就不推送。
 """
 import datetime
 import hashlib
 import json
 import os
-import re
 import sys
 
 
 def main():
     if len(sys.argv) < 2:
-        sys.exit("usage: meta.py <build_dir> [src.conf]")
+        sys.exit("usage: meta.py <build_dir> [src_dir]")
     build = sys.argv[1]
-    src = sys.argv[2] if len(sys.argv) > 2 else ""
+    src_dir = sys.argv[2] if len(sys.argv) > 2 else ""
 
-    upstream_time = ""
-    if src and os.path.exists(src):
-        with open(src, "r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                m = re.search(r"build time\s*:\s*(.+)", line, re.I)
-                if m:
-                    upstream_time = m.group(1).strip()
-                    break
+    files = {}
+    combined = hashlib.sha256()
+    for root, _dirs, names in os.walk(build):
+        for n in sorted(names):
+            if n == "meta.json":
+                continue
+            fp = os.path.join(root, n)
+            rel = os.path.relpath(fp, build).replace(os.sep, "/")
+            with open(fp, "rb") as f:
+                h = hashlib.sha256(f.read()).hexdigest()
+            files[rel] = h
+            combined.update(rel.encode())
+            combined.update(h.encode())
 
-    providers = {}
-    for key in ("adblock", "direct", "proxy"):
-        path = os.path.join(build, "providers", key + ".yaml")
-        with open(path, "rb") as f:
-            data = f.read()
-        providers[key] = {
-            "entries": data.count(b"\n  - "),
-            "bytes": len(data),
-            "sha256": hashlib.sha256(data).hexdigest(),
-        }
+    upstream_time, total_rules = "", 0
+    idx_path = os.path.join(build, "index.json")
+    if os.path.exists(idx_path):
+        with open(idx_path, "r", encoding="utf-8") as f:
+            idx = json.load(f)
+        upstream_time = idx.get("upstream_build_time", "")
+        total_rules = idx.get("common", {}).get("adblock", {}).get("entries", 0)
 
     meta = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z"),
+        .replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "upstream_build_time": upstream_time,
-        "source": os.environ.get("SRC_URL", ""),
-        "total_entries": sum(v["entries"] for v in providers.values()),
-        "providers": providers,
+        "content_hash": combined.hexdigest(),
+        "file_count": len(files),
+        "total_bytes": sum(os.path.getsize(os.path.join(build, p)) for p in files),
+        "adblock_entries": total_rules,
+        "files": files,
     }
-
-    out = os.path.join(build, "meta.json")
-    with open(out, "w", encoding="utf-8") as f:
+    with open(os.path.join(build, "meta.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
-    print(json.dumps(meta, ensure_ascii=False, indent=2))
+    print("content_hash = %s" % meta["content_hash"])
+    print("files = %d, bytes = %.1f MB" % (meta["file_count"], meta["total_bytes"] / 1048576))
 
 
 if __name__ == "__main__":

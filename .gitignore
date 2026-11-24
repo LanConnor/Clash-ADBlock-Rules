@@ -1,4 +1,5 @@
 build/
+confs/
 src.conf
 out/
 __pycache__/

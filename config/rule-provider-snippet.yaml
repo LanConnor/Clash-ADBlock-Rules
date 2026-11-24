@@ -1,35 +1,35 @@
 # ============================================================
 # 方案 A（推荐）：把这段粘进你自己的 Clash 配置
 # 只加一次，之后规则每天自动更新，节点完全不用动
-#
-# 规则集地址已指向 LanConnor/Clash-ADBlock-Rules ，直接用
+# 示例用的是「白名单 + 去广告」变体；换成别的变体只需改 direct/proxy 两行的路径
+# 可用变体见 https://github.com/LanConnor/Clash-ADBlock-Rules#变体一览
 # ============================================================
 
-# 1) 追加到配置顶层的 rule-providers 段（和你已有的合并）
+# 1) 追加到配置顶层的 rule-providers（和你已有的合并）
 rule-providers:
   sr-adblock:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/adblock.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml
     path: ./ruleset/sr-adblock.yaml
     interval: 86400
   sr-direct:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/direct.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct.yaml
     path: ./ruleset/sr-direct.yaml
     interval: 86400
   sr-proxy:
     type: http
     behavior: classical
     format: yaml
-    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/proxy.yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml
     path: ./ruleset/sr-proxy.yaml
     interval: 86400
 
-# 2) 把 rules 段换成下面这几条（顺序不能变）
+# 2) 把 rules 段换成下面这些（顺序不能变）
 #    代理组名如果不是「🚀 代理」，改成你自己配置里的组名
 rules:
   - RULE-SET,sr-adblock,REJECT

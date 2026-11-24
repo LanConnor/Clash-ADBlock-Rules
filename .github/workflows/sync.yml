@@ -1,27 +1,44 @@
 name: sync-rules
 
 # 每天 UTC 23:30（北京时间 07:30）跑一次。上游每天 UTC 23:00 左右构建。
-# 注意：GitHub 的 cron 用的是 UTC，且高负载时可能延迟几分钟到半小时。
+# GitHub 的 cron 用 UTC，高负载时可能延迟几分钟到半小时。
 on:
   schedule:
     - cron: "30 23 * * *"
-  workflow_dispatch:          # 手动触发：仓库 Actions 页面 -> Run workflow
+  workflow_dispatch:            # 手动触发：Actions 页面 -> Run workflow
   push:
     branches: [main]
     paths:
       - "scripts/**"
+      - "config/**"
       - ".github/workflows/**"
 
 permissions:
-  contents: write             # 需要写权限来 force-push dist 分支
+  contents: write               # 需要写权限来 force-push dist 分支
 
 concurrency:
   group: sync-rules
   cancel-in-progress: false
 
 env:
-  SRC_URL: "https://johnshall.github.io/Shadowrocket-ADBlock-Rules-Forever/sr_top500_whitelist_ad.conf"
+  SRC_BASE: "https://johnshall.github.io/Shadowrocket-ADBlock-Rules-Forever"
   GROUP: "🚀 代理"
+  # 上游 14 个变体，顺序与上游 README 的分类表对应
+  CONF_FILES: >-
+    sr_top500_whitelist_ad.conf
+    sr_top500_whitelist.conf
+    sr_top500_banlist_ad.conf
+    sr_top500_banlist.conf
+    sr_cnip_ad.conf
+    sr_cnip.conf
+    sr_backcn_ad.conf
+    sr_backcn.conf
+    sr_direct_banad.conf
+    sr_proxy_banad.conf
+    sr_ad_only.conf
+    sr_adb.conf
+    lazy.conf
+    lazy_group.conf
 
 jobs:
   sync:
@@ -37,53 +54,69 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 拉取上游 .conf
-        run: |
-          curl -fsSL --retry 3 --retry-delay 5 "$SRC_URL" -o src.conf
-          echo "上游规则构建时间：$(grep -m1 -i 'build time' src.conf)"
-          echo "体积：$(du -h src.conf | cut -f1)"
-
-      - name: 转换为 Clash YAML
+      - name: 拉取上游 14 个变体
         run: |
           set -euo pipefail
-          mkdir -p build
-          python scripts/sr2clash.py -i src.conf -o build \
-            --mode provider \
-            -g "$GROUP" \
+          mkdir -p confs
+          for f in $CONF_FILES; do
+            curl -fsSL --retry 3 --retry-delay 5 "$SRC_BASE/$f" -o "confs/$f"
+          done
+          echo "下载 $(ls confs | wc -l) 个文件，共 $(du -sh confs | cut -f1)"
+          grep -m1 -i 'build time' confs/sr_top500_whitelist_ad.conf || true
+
+      - name: 构建全部变体
+        run: |
+          set -euo pipefail
+          python scripts/build_variants.py --conf-dir confs --out build \
+            --group "$GROUP" \
             --remote-base "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist"
-          mv build/config-providers.yaml build/config-online.yaml
-          python scripts/meta.py build src.conf
-          echo "--- 产物 ---"
-          ls -lh build build/providers
+          python scripts/meta.py build
+          pip install --quiet pyyaml
+          python scripts/validate.py build
+          echo "产物 $(du -sh build | cut -f1)"
+
+      - name: 比对线上版本
+        id: diff
+        run: |
+          set -euo pipefail
+          NEW=$(python -c "import json;print(json.load(open('build/meta.json'))['content_hash'])")
+          OLD=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/meta.json" \
+                2>/dev/null | python -c "import json,sys;print(json.load(sys.stdin).get('content_hash',''))" \
+                2>/dev/null || true)
+          echo "线上: ${OLD:-<空>} / 本次: $NEW"
+          if [ "$OLD" = "$NEW" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "内容一致，跳过推送"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: 写入运行摘要
+        if: always()
+        run: |
+          {
+            echo "### 规则同步"
+            echo ""
+            python scripts/summary.py build/index.json
+            echo ""
+            echo '```'
+            head -8 build/meta.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
       - name: 推送到 dist 分支
+        if: steps.diff.outputs.changed == 'true'
         run: |
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # 每次都用孤儿分支重建单个提交再 force-push，
-          # 这样 dist 分支永远只有 1 个提交，仓库体积不会一天天堆上去。
+          # 每次都重建孤儿分支成单个提交再 force-push：
+          # dist 分支永远只有 1 个提交，仓库体积不随天数增长，raw 地址保持不变。
           git checkout --orphan dist-new
           git rm -rf . > /dev/null 2>&1 || true
           find . -mindepth 1 -maxdepth 1 ! -name build ! -name .git -exec rm -rf {} +
           cp -r build/. .
-          rm -rf build src.conf
+          rm -rf build confs
           git add -A
           git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push -f origin HEAD:dist
-
-      - name: 输出订阅地址
-        run: |
-          {
-            echo "### 规则已更新"
-            echo ""
-            echo "| 文件 | 地址 |"
-            echo "|---|---|"
-            for f in config-online.yaml providers/adblock.yaml providers/direct.yaml providers/proxy.yaml meta.json; do
-              echo "| \`$f\` | https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/$f |"
-            done
-            echo ""
-            echo '```json'
-            cat meta.json
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
