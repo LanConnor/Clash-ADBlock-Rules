@@ -406,7 +406,7 @@ def main():
 
     # 共享广告规则
     if ad_block:
-        entries = [rule_line(*e) for e in ad_block]
+        entries = dedupe([rule_line(*e) for e in ad_block])
         write_set(os.path.join(args.out, "common", "adblock.yaml"), entries,
                   "广告拦截规则（%d 个变体共用）" % sum(1 for v in index["variants"] if v["stats"]["reject"]))
         index["common"]["adblock"] = {
