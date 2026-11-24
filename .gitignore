@@ -1,0 +1,5 @@
+build/
+src.conf
+out/
+__pycache__/
+*.pyc

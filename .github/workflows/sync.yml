@@ -1,0 +1,89 @@
+name: sync-rules
+
+# 每天 UTC 23:30（北京时间 07:30）跑一次。上游每天 UTC 23:00 左右构建。
+# 注意：GitHub 的 cron 用的是 UTC，且高负载时可能延迟几分钟到半小时。
+on:
+  schedule:
+    - cron: "30 23 * * *"
+  workflow_dispatch:          # 手动触发：仓库 Actions 页面 -> Run workflow
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: write             # 需要写权限来 force-push dist 分支
+
+concurrency:
+  group: sync-rules
+  cancel-in-progress: false
+
+env:
+  SRC_URL: "https://johnshall.github.io/Shadowrocket-ADBlock-Rules-Forever/sr_top500_whitelist_ad.conf"
+  GROUP: "🚀 代理"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 拉取上游 .conf
+        run: |
+          curl -fsSL --retry 3 --retry-delay 5 "$SRC_URL" -o src.conf
+          echo "上游规则构建时间：$(grep -m1 -i 'build time' src.conf)"
+          echo "体积：$(du -h src.conf | cut -f1)"
+
+      - name: 转换为 Clash YAML
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          python scripts/sr2clash.py -i src.conf -o build \
+            --mode provider \
+            -g "$GROUP" \
+            --remote-base "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist"
+          mv build/config-providers.yaml build/config-online.yaml
+          python scripts/meta.py build src.conf
+          echo "--- 产物 ---"
+          ls -lh build build/providers
+
+      - name: 推送到 dist 分支
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 每次都用孤儿分支重建单个提交再 force-push，
+          # 这样 dist 分支永远只有 1 个提交，仓库体积不会一天天堆上去。
+          git checkout --orphan dist-new
+          git rm -rf . > /dev/null 2>&1 || true
+          find . -mindepth 1 -maxdepth 1 ! -name build ! -name .git -exec rm -rf {} +
+          cp -r build/. .
+          rm -rf build src.conf
+          git add -A
+          git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push -f origin HEAD:dist
+
+      - name: 输出订阅地址
+        run: |
+          {
+            echo "### 规则已更新"
+            echo ""
+            echo "| 文件 | 地址 |"
+            echo "|---|---|"
+            for f in config-online.yaml providers/adblock.yaml providers/direct.yaml providers/proxy.yaml meta.json; do
+              echo "| \`$f\` | https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/$f |"
+            done
+            echo ""
+            echo '```json'
+            cat meta.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

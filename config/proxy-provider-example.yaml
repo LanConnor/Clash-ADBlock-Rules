@@ -1,0 +1,103 @@
+# ============================================================
+# 方案 B（进阶）：把整份配置当订阅链接用
+#
+# 节点不写死在文件里，而是用 proxy-providers 去拉你机场的 Clash 订阅。
+# 这样「节点」和「规则」两条线都自动更新，客户端里只加一个地址就够。
+#
+# 前提：你的订阅要是 Clash 格式（一般加 ?flag=clash 或 /clash 后缀）。
+# 拿不到 Clash 格式就退回方案 A。
+# ============================================================
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+tcp-concurrent: true
+unified-delay: true
+
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - '+.msftconnecttest.com'
+    - '+.msftncsi.com'
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://dns.google/dns-query
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+
+# 改成你自己的机场订阅地址
+proxy-providers:
+  airport:
+    type: http
+    url: "https://你的订阅地址?flag=clash&udp=true"
+    interval: 3600
+    path: ./providers/airport.yaml
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 300
+
+proxy-groups:
+  - name: 🚀 代理
+    type: select
+    use: [airport]
+  - name: ⚡ 自动选择
+    type: url-test
+    use: [airport]
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+# 规则集地址：把 LanConnor/Clash-ADBlock-Rules 换成你的仓库
+rule-providers:
+  sr-adblock:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/adblock.yaml
+    path: ./ruleset/sr-adblock.yaml
+    interval: 86400
+  sr-direct:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/direct.yaml
+    path: ./ruleset/sr-direct.yaml
+    interval: 86400
+  sr-proxy:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/providers/proxy.yaml
+    path: ./ruleset/sr-proxy.yaml
+    interval: 86400
+
+rules:
+  - RULE-SET,sr-adblock,REJECT
+  - RULE-SET,sr-direct,DIRECT
+  - RULE-SET,sr-proxy,🚀 代理
+  - GEOIP,CN,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR6,fe80::/10,DIRECT,no-resolve
+  - IP-CIDR6,fc00::/7,DIRECT,no-resolve
+  - IP-CIDR6,::1/128,DIRECT,no-resolve
+  - MATCH,🚀 代理
