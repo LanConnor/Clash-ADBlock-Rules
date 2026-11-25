@@ -4,7 +4,4 @@ confs/
 src.conf
 out/
 target/
-__pycache__/
-*.pyc
-
 .idea/

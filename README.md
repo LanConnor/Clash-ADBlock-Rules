@@ -156,7 +156,6 @@ java -jar target/clash-rules.jar validate build confs
 工程使用 Spring Boot 4.2 + JDK 21，入口是 `target/clash-rules.jar`，子命令：
 `build`（批量转换）、`sr2clash`（单文件转换）、`meta`（生成指纹）、
 `validate`（体检 + 顺序等价校验）、`summary`（运行摘要）。
-原 Python 脚本归档在 `legacy/python/`，仅作对照参考，CI 不再使用。
 
 > 环境要求：JDK 21、Maven 3.9+。迁移后的 Java 产物与之前的 Python 版本逐字节一致。
 
