@@ -6,6 +6,8 @@
 
 上游每天 UTC 23:00 左右重新构建，本仓库 UTC 23:30 跟进。
 
+转换工具已迁移到 Java（Spring Boot 4.2 / JDK 21），产物仍是标准 Clash YAML，客户端无感知。
+
 ## 订阅地址（完整）
 
 默认订阅（推荐，白名单 + 去广告）：
@@ -99,8 +101,8 @@ Shadowrocket 的 `ss://` base64 订阅不是 Clash 格式，拉不了。
 
 - `main` = 代码与工作流，`dist` = 构建产物（永远只有 1 个提交）。
 - GitHub Actions 每天 UTC 23:30 自动跑，也可在 Actions 页面手动 Run workflow。
-- 工作流自带体检（`scripts/validate.py build confs`）：规则类型、provider 声明、策略引用、
-  MATCH 兜底、provider 缓存路径唯一性，并逐变体校验「首条匹配」语义与上游一致；
+- 工作流自带体检（`java -jar target/clash-rules.jar validate build confs`）：规则类型、provider 声明、
+  策略引用、MATCH 兜底、provider 缓存路径唯一性，并逐变体校验「首条匹配」语义与上游一致；
   任何一项不对就直接失败，不会把坏配置推到线上。
 
 ## 国内网络访问
@@ -144,14 +146,19 @@ for f in sr_top500_whitelist_ad.conf sr_top500_whitelist.conf sr_top500_banlist_
          sr_direct_banad.conf sr_proxy_banad.conf sr_ad_only.conf sr_adb.conf lazy.conf lazy_group.conf; do
   curl -fsSL "https://johnshall.github.io/Shadowrocket-ADBlock-Rules-Forever/$f" -o "confs/$f"
 done
-python scripts/build_variants.py --conf-dir confs --out build \
+mvn -q -B -DskipTests package
+java -jar target/clash-rules.jar build --conf-dir confs --out build \
   --remote-base https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist
-python scripts/meta.py build
-python scripts/validate.py build confs
+java -jar target/clash-rules.jar meta build
+java -jar target/clash-rules.jar validate build confs
 ```
 
-`scripts/` 五个文件：`build_variants.py`（批量转换）、`sr2clash.py`（单文件转换，被前者复用）、
-`meta.py`（生成指纹）、`validate.py`（体检 + 顺序等价校验）、`summary.py`（运行摘要）。
+工程使用 Spring Boot 4.2 + JDK 21，入口是 `target/clash-rules.jar`，子命令：
+`build`（批量转换）、`sr2clash`（单文件转换）、`meta`（生成指纹）、
+`validate`（体检 + 顺序等价校验）、`summary`（运行摘要）。
+原 Python 脚本归档在 `legacy/python/`，仅作对照参考，CI 不再使用。
+
+> 环境要求：JDK 21、Maven 3.9+。迁移后的 Java 产物与之前的 Python 版本逐字节一致。
 
 > GitHub 对公开仓库的定时工作流有限制：连续 60 天没有任何提交会被自动停用。
 > 本仓库每天都有 bot 提交，不会踩到。

@@ -9,7 +9,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/**"
+      - "src/**"
+      - "pom.xml"
       - "config/**"
       - ".github/workflows/**"
 
@@ -49,10 +50,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 准备 Python
-        uses: actions/setup-python@v5
+      - name: 准备 Java
+        uses: actions/setup-java@v4
         with:
-          python-version: "3.12"
+          distribution: temurin
+          java-version: "21"
+          cache: maven
 
       - name: 拉取上游 14 个变体
         run: |
@@ -64,26 +67,29 @@ jobs:
           echo "下载 $(ls confs | wc -l) 个文件，共 $(du -sh confs | cut -f1)"
           grep -m1 -i 'build time' confs/sr_top500_whitelist_ad.conf || true
 
+      - name: 构建 Java 工程
+        run: |
+          set -euo pipefail
+          mvn -q -B -DskipTests package
+
       - name: 构建全部变体
         run: |
           set -euo pipefail
-          python scripts/build_variants.py --conf-dir confs --out build \
+          java -jar target/clash-rules.jar build --conf-dir confs --out build \
             --group "$GROUP" \
             --remote-base "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist"
-          python scripts/meta.py build
-          pip install --quiet pyyaml
+          java -jar target/clash-rules.jar meta build
           # 第二个参数 confs 让体检额外逐变体校验「首条匹配」与上游是否一致
-          python scripts/validate.py build confs
+          java -jar target/clash-rules.jar validate build confs
           echo "产物 $(du -sh build | cut -f1)"
 
       - name: 比对线上版本
         id: diff
         run: |
           set -euo pipefail
-          NEW=$(python -c "import json;print(json.load(open('build/meta.json'))['content_hash'])")
+          NEW=$(jq -r '.content_hash' build/meta.json)
           OLD=$(curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/dist/meta.json" \
-                2>/dev/null | python -c "import json,sys;print(json.load(sys.stdin).get('content_hash',''))" \
-                2>/dev/null || true)
+                2>/dev/null | jq -r '.content_hash // empty' 2>/dev/null || true)
           echo "线上: ${OLD:-<空>} / 本次: $NEW"
           if [ "$OLD" = "$NEW" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -98,7 +104,7 @@ jobs:
           {
             echo "### 规则同步"
             echo ""
-            python scripts/summary.py build/index.json
+            java -jar target/clash-rules.jar summary build/index.json
             echo ""
             echo '```'
             head -8 build/meta.json
@@ -117,7 +123,7 @@ jobs:
           git rm -rf . > /dev/null 2>&1 || true
           find . -mindepth 1 -maxdepth 1 ! -name build ! -name .git -exec rm -rf {} +
           cp -r build/. .
-          rm -rf build confs
+          rm -rf build confs target
           git add -A
           git commit -m "sync: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push -f origin HEAD:dist
