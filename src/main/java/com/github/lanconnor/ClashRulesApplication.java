@@ -1,4 +1,4 @@
-package com.github.lanconnor.clashrules;
+package com.github.lanconnor;
 
 import org.springframework.boot.Banner;
 import org.springframework.boot.SpringApplication;
