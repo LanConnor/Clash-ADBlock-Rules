@@ -13,7 +13,7 @@ mixed-port: 7890
 allow-lan: false
 mode: rule
 log-level: info
-ipv6: false
+ipv6: true
 tcp-concurrent: true
 unified-delay: true
 
