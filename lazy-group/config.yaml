@@ -1,0 +1,395 @@
+# ============================================================
+# 懒人配置（含策略组）（变体 id: lazy-group）
+# 39 条规则 + AI、流媒体、游戏平台、微软谷歌苹果等 17 个独立分流组。
+# 上游: lazy_group.conf   构建时间: UTC 2026-11-27 23:02:46
+# 规则: REJECT 0 / DIRECT 0 / 代理 0 / 其他 5
+# ============================================================
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: true
+tcp-concurrent: true
+unified-delay: true
+external-controller: 127.0.0.1:9090
+
+dns:
+  enable: true
+  ipv6: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - '+.msftconnecttest.com'
+    - '+.msftncsi.com'
+    - 'time.*.com'
+    - 'ntp.*.com'
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://dns.google/dns-query
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+
+proxies:
+  # ↓↓↓ 换成你自己的节点，或用 proxy-providers 拉你的机场订阅 ↓↓↓
+  - name: "占位节点"
+    type: ss
+    server: 1.2.3.4
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    udp: true
+
+proxy-groups:
+  - name: "🚀 代理"
+    type: select
+    proxies: ["⚡ 自动选择", "占位节点", DIRECT]
+  - name: "⚡ 自动选择"
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    proxies: ["占位节点"]
+  - name: "AI"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Amazon"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Disney+"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Facebook"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Max"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Netflix"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "PayPal"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Spotify"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Telegram"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "TikTok"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "Twitter"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "YouTube"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "哔哩哔哩"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "微软服务"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "游戏平台"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "苹果服务"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+  - name: "谷歌服务"
+    type: select
+    proxies: ["🚀 代理", "⚡ 自动选择", DIRECT]
+
+rule-providers:
+  rs-ai:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/rulesets/rs-ai.yaml
+    path: ./ruleset/lazy-group-rs-ai.yaml
+    interval: 86400
+  rs-youtube:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml
+    path: ./ruleset/lazy-group-rs-youtube.yaml
+    interval: 86400
+  rs-netflix:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Netflix/Netflix.yaml
+    path: ./ruleset/lazy-group-rs-netflix.yaml
+    interval: 86400
+  rs-disney:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Disney/Disney.yaml
+    path: ./ruleset/lazy-group-rs-disney.yaml
+    interval: 86400
+  rs-hbo:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/HBO/HBO.yaml
+    path: ./ruleset/lazy-group-rs-hbo.yaml
+    interval: 86400
+  rs-spotify:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Spotify/Spotify.yaml
+    path: ./ruleset/lazy-group-rs-spotify.yaml
+    interval: 86400
+  rs-telegram:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Telegram/Telegram.yaml
+    path: ./ruleset/lazy-group-rs-telegram.yaml
+    interval: 86400
+  rs-paypal:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PayPal/PayPal.yaml
+    path: ./ruleset/lazy-group-rs-paypal.yaml
+    interval: 86400
+  rs-twitter:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml
+    path: ./ruleset/lazy-group-rs-twitter.yaml
+    interval: 86400
+  rs-facebook:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Facebook/Facebook.yaml
+    path: ./ruleset/lazy-group-rs-facebook.yaml
+    interval: 86400
+  rs-amazon:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Amazon/Amazon.yaml
+    path: ./ruleset/lazy-group-rs-amazon.yaml
+    interval: 86400
+  rs-sony:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sony/Sony.yaml
+    path: ./ruleset/lazy-group-rs-sony.yaml
+    interval: 86400
+  rs-nintendo:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Nintendo/Nintendo.yaml
+    path: ./ruleset/lazy-group-rs-nintendo.yaml
+    interval: 86400
+  rs-epic:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Epic/Epic.yaml
+    path: ./ruleset/lazy-group-rs-epic.yaml
+    interval: 86400
+  rs-steamcn:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/SteamCN/SteamCN.yaml
+    path: ./ruleset/lazy-group-rs-steamcn.yaml
+    interval: 86400
+  rs-steam:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Steam/Steam.yaml
+    path: ./ruleset/lazy-group-rs-steam.yaml
+    interval: 86400
+  rs-game:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Game/Game.yaml
+    path: ./ruleset/lazy-group-rs-game.yaml
+    interval: 86400
+  rs-github:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/GitHub/GitHub.yaml
+    path: ./ruleset/lazy-group-rs-github.yaml
+    interval: 86400
+  rs-microsoft:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Microsoft/Microsoft.yaml
+    path: ./ruleset/lazy-group-rs-microsoft.yaml
+    interval: 86400
+  rs-google:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Google/Google.yaml
+    path: ./ruleset/lazy-group-rs-google.yaml
+    interval: 86400
+  rs-apple:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple.yaml
+    path: ./ruleset/lazy-group-rs-apple.yaml
+    interval: 86400
+  rs-bilibili:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BiliBili/BiliBili.yaml
+    path: ./ruleset/lazy-group-rs-bilibili.yaml
+    interval: 86400
+  rs-neteasemusic:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/NetEaseMusic/NetEaseMusic.yaml
+    path: ./ruleset/lazy-group-rs-neteasemusic.yaml
+    interval: 86400
+  rs-baidu:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Baidu/Baidu.yaml
+    path: ./ruleset/lazy-group-rs-baidu.yaml
+    interval: 86400
+  rs-douban:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouBan/DouBan.yaml
+    path: ./ruleset/lazy-group-rs-douban.yaml
+    interval: 86400
+  rs-wechat:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/WeChat/WeChat.yaml
+    path: ./ruleset/lazy-group-rs-wechat.yaml
+    interval: 86400
+  rs-sina:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sina/Sina.yaml
+    path: ./ruleset/lazy-group-rs-sina.yaml
+    interval: 86400
+  rs-zhihu:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Zhihu/Zhihu.yaml
+    path: ./ruleset/lazy-group-rs-zhihu.yaml
+    interval: 86400
+  rs-xiaohongshu:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/XiaoHongShu/XiaoHongShu.yaml
+    path: ./ruleset/lazy-group-rs-xiaohongshu.yaml
+    interval: 86400
+  rs-douyin:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouYin/DouYin.yaml
+    path: ./ruleset/lazy-group-rs-douyin.yaml
+    interval: 86400
+  rs-tiktok:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/TikTok/TikTok.yaml
+    path: ./ruleset/lazy-group-rs-tiktok.yaml
+    interval: 86400
+  rs-global:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Global/Global.yaml
+    path: ./ruleset/lazy-group-rs-global.yaml
+    interval: 86400
+  rs-china:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/China/China.yaml
+    path: ./ruleset/lazy-group-rs-china.yaml
+    interval: 86400
+  rs-lan:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Lan/Lan.yaml
+    path: ./ruleset/lazy-group-rs-lan.yaml
+    interval: 86400
+
+rules:
+  - RULE-SET,rs-ai,AI
+  - RULE-SET,rs-youtube,YouTube
+  - RULE-SET,rs-netflix,Netflix
+  - RULE-SET,rs-disney,Disney+
+  - DOMAIN-SUFFIX,litix.io,Max
+  - DOMAIN-SUFFIX,discomax.com,Max
+  - DOMAIN-SUFFIX,brightline.tv,Max
+  - RULE-SET,rs-hbo,Max
+  - RULE-SET,rs-spotify,Spotify
+  - RULE-SET,rs-telegram,Telegram
+  - RULE-SET,rs-paypal,PayPal
+  - RULE-SET,rs-twitter,Twitter
+  - RULE-SET,rs-facebook,Facebook
+  - RULE-SET,rs-amazon,Amazon
+  - RULE-SET,rs-sony,游戏平台
+  - RULE-SET,rs-nintendo,游戏平台
+  - RULE-SET,rs-epic,游戏平台
+  - RULE-SET,rs-steamcn,游戏平台
+  - RULE-SET,rs-steam,游戏平台
+  - RULE-SET,rs-game,游戏平台
+  - RULE-SET,rs-github,🚀 代理
+  - RULE-SET,rs-microsoft,微软服务
+  - RULE-SET,rs-google,谷歌服务
+  - RULE-SET,rs-apple,苹果服务
+  - RULE-SET,rs-bilibili,哔哩哔哩
+  - RULE-SET,rs-neteasemusic,DIRECT
+  - RULE-SET,rs-baidu,DIRECT
+  - RULE-SET,rs-douban,DIRECT
+  - RULE-SET,rs-wechat,DIRECT
+  - RULE-SET,rs-sina,DIRECT
+  - RULE-SET,rs-zhihu,DIRECT
+  - RULE-SET,rs-xiaohongshu,DIRECT
+  - RULE-SET,rs-douyin,DIRECT
+  - RULE-SET,rs-tiktok,TikTok
+  - RULE-SET,rs-global,🚀 代理
+  - RULE-SET,rs-china,DIRECT
+  - RULE-SET,rs-lan,DIRECT
+  - GEOIP,CN,DIRECT
+  - MATCH,🚀 代理

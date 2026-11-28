@@ -1,0 +1,100 @@
+# ============================================================
+# 黑名单 + 去广告（变体 id: banlist-ad）
+# 只代理 GFWList 命中的站点，其余（含国内）全部直连，同时拦截广告。
+# 上游: sr_top500_banlist_ad.conf   构建时间: UTC 2026-11-27 23:02:46
+# 规则: REJECT 54429 / DIRECT 0 / 代理 30265 / 其他 1
+# ============================================================
+
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+tcp-concurrent: true
+unified-delay: true
+external-controller: 127.0.0.1:9090
+
+dns:
+  enable: true
+  ipv6: false
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - '+.msftconnecttest.com'
+    - '+.msftncsi.com'
+    - 'time.*.com'
+    - 'ntp.*.com'
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+  fallback:
+    - https://1.1.1.1/dns-query
+    - https://dns.google/dns-query
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+
+proxies:
+  # ↓↓↓ 换成你自己的节点，或用 proxy-providers 拉你的机场订阅 ↓↓↓
+  - name: "占位节点"
+    type: ss
+    server: 1.2.3.4
+    port: 8388
+    cipher: aes-256-gcm
+    password: "password"
+    udp: true
+
+proxy-groups:
+  - name: "🚀 代理"
+    type: select
+    proxies: ["⚡ 自动选择", "占位节点", DIRECT]
+  - name: "⚡ 自动选择"
+    type: url-test
+    url: http://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    proxies: ["占位节点"]
+
+rule-providers:
+  proxy:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml
+    path: ./ruleset/banlist-ad-proxy.yaml
+    interval: 86400
+  sr-adblock:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml
+    path: ./ruleset/banlist-ad-sr-adblock.yaml
+    interval: 86400
+  proxy-2:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/banlist-ad/proxy-2.yaml
+    path: ./ruleset/banlist-ad-proxy-2.yaml
+    interval: 86400
+  rs-applenews:
+    type: http
+    behavior: classical
+    format: yaml
+    url: https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml
+    path: ./ruleset/banlist-ad-rs-applenews.yaml
+    interval: 86400
+
+rules:
+  - RULE-SET,proxy,🚀 代理
+  - RULE-SET,sr-adblock,REJECT
+  - RULE-SET,proxy-2,🚀 代理
+  - RULE-SET,rs-applenews,🚀 代理
+  - MATCH,DIRECT

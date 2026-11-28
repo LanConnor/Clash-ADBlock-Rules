@@ -1,0 +1,359 @@
+{
+  "variants": [
+    {
+      "id": "whitelist-ad",
+      "name": "白名单 + 去广告",
+      "category": "白名单",
+      "description": "top500 里可直连的走直连，其余境外站点走代理，同时拦截广告。日常最通用的选择。",
+      "recommended": true,
+      "upstream_file": "sr_top500_whitelist_ad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 381,
+        "proxy": 389,
+        "custom_groups": 0,
+        "total_rules": 14
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/config.yaml",
+      "providers": {
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml",
+        "direct": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct.yaml",
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml",
+        "direct-2": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct-2.yaml",
+        "rs-applenews": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml"
+      }
+    },
+    {
+      "id": "whitelist",
+      "name": "白名单",
+      "category": "白名单",
+      "description": "同上，但不含广告拦截规则。",
+      "recommended": false,
+      "upstream_file": "sr_top500_whitelist.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 381,
+        "proxy": 389,
+        "custom_groups": 0,
+        "total_rules": 13
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist/config.yaml",
+      "providers": {
+        "direct": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct.yaml",
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml",
+        "direct-2": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct-2.yaml",
+        "rs-applenews": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml"
+      }
+    },
+    {
+      "id": "banlist-ad",
+      "name": "黑名单 + 去广告",
+      "category": "黑名单",
+      "description": "只代理 GFWList 命中的站点，其余（含国内）全部直连，同时拦截广告。",
+      "recommended": false,
+      "upstream_file": "sr_top500_banlist_ad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 30265,
+        "custom_groups": 0,
+        "total_rules": 5
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/banlist-ad/config.yaml",
+      "providers": {
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml",
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml",
+        "proxy-2": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/banlist-ad/proxy-2.yaml",
+        "rs-applenews": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml"
+      }
+    },
+    {
+      "id": "banlist",
+      "name": "黑名单",
+      "category": "黑名单",
+      "description": "同上，但不含广告拦截规则。",
+      "recommended": false,
+      "upstream_file": "sr_top500_banlist.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 0,
+        "proxy": 30265,
+        "custom_groups": 0,
+        "total_rules": 3
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/banlist/config.yaml",
+      "providers": {
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/banlist/proxy.yaml",
+        "rs-applenews": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/AppleNews/AppleNews.yaml"
+      }
+    },
+    {
+      "id": "cnip-ad",
+      "name": "国内外划分 + 去广告",
+      "category": "国内外划分",
+      "description": "按 GeoIP 划内外：境外一律代理，国内直连，同时拦截广告。",
+      "recommended": false,
+      "upstream_file": "sr_cnip_ad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 390,
+        "custom_groups": 0,
+        "total_rules": 4
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/cnip-ad/config.yaml",
+      "providers": {
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/cnip-ad/proxy.yaml",
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml"
+      }
+    },
+    {
+      "id": "cnip",
+      "name": "国内外划分",
+      "category": "国内外划分",
+      "description": "同上，但不含广告拦截规则。",
+      "recommended": false,
+      "upstream_file": "sr_cnip.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 0,
+        "proxy": 390,
+        "custom_groups": 0,
+        "total_rules": 3
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/cnip/config.yaml",
+      "providers": {
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/cnip-ad/proxy.yaml"
+      }
+    },
+    {
+      "id": "backcn-ad",
+      "name": "回国 + 去广告",
+      "category": "回国",
+      "description": "反过来的逻辑：国内站点走代理、境外直连。给海外用户访问国内服务用。",
+      "recommended": false,
+      "upstream_file": "sr_backcn_ad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 1,
+        "custom_groups": 0,
+        "total_rules": 4
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/backcn-ad/config.yaml",
+      "providers": {
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml"
+      }
+    },
+    {
+      "id": "backcn",
+      "name": "回国",
+      "category": "回国",
+      "description": "同上，但不含广告拦截规则。",
+      "recommended": false,
+      "upstream_file": "sr_backcn.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 0,
+        "proxy": 1,
+        "custom_groups": 0,
+        "total_rules": 3
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/backcn/config.yaml",
+      "providers": {}
+    },
+    {
+      "id": "direct-ad",
+      "name": "全局直连 + 去广告",
+      "category": "特殊规则",
+      "description": "所有流量直连，只借这份配置的广告拦截能力。",
+      "recommended": false,
+      "upstream_file": "sr_direct_banad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 0,
+        "custom_groups": 0,
+        "total_rules": 2
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/direct-ad/config.yaml",
+      "providers": {
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml"
+      }
+    },
+    {
+      "id": "proxy-ad",
+      "name": "全局代理 + 去广告",
+      "category": "特殊规则",
+      "description": "所有流量走代理，只有广告域名被拦。",
+      "recommended": false,
+      "upstream_file": "sr_proxy_banad.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 0,
+        "custom_groups": 0,
+        "total_rules": 9
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/proxy-ad/config.yaml",
+      "providers": {
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml"
+      }
+    },
+    {
+      "id": "ad-only",
+      "name": "仅去广告",
+      "category": "特殊规则",
+      "description": "只拦广告，其余全部直连。上游没有兜底规则，这里补了 MATCH,DIRECT。",
+      "recommended": false,
+      "upstream_file": "sr_ad_only.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 0,
+        "proxy": 0,
+        "custom_groups": 0,
+        "total_rules": 2
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/ad-only/config.yaml",
+      "providers": {
+        "sr-adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml"
+      }
+    },
+    {
+      "id": "adb",
+      "name": "综合版",
+      "category": "特殊规则",
+      "description": "上游另一套合并规则，黑白名单混合，行为与白名单版接近。",
+      "recommended": false,
+      "upstream_file": "sr_adb.conf",
+      "stats": {
+        "reject": 54429,
+        "direct": 101,
+        "proxy": 613,
+        "custom_groups": 0,
+        "total_rules": 13
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/adb/config.yaml",
+      "providers": {
+        "adblock": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/adb/adblock.yaml",
+        "proxy": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/proxy.yaml",
+        "direct": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/whitelist-ad/direct.yaml",
+        "adblock-2": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/adb/adblock-2.yaml",
+        "proxy-2": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/adb/proxy-2.yaml"
+      }
+    },
+    {
+      "id": "lazy",
+      "name": "懒人配置",
+      "category": "懒人",
+      "description": "39 条粗粒度规则，不依赖任何外部规则集，体积最小。",
+      "recommended": false,
+      "upstream_file": "lazy.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 0,
+        "proxy": 3,
+        "custom_groups": 0,
+        "total_rules": 39
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/lazy/config.yaml",
+      "providers": {
+        "rs-ai": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/rulesets/rs-ai.yaml",
+        "rs-youtube": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml",
+        "rs-netflix": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Netflix/Netflix.yaml",
+        "rs-disney": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Disney/Disney.yaml",
+        "rs-hbo": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/HBO/HBO.yaml",
+        "rs-spotify": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Spotify/Spotify.yaml",
+        "rs-telegram": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Telegram/Telegram.yaml",
+        "rs-paypal": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PayPal/PayPal.yaml",
+        "rs-twitter": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml",
+        "rs-facebook": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Facebook/Facebook.yaml",
+        "rs-amazon": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Amazon/Amazon.yaml",
+        "rs-sony": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sony/Sony.yaml",
+        "rs-nintendo": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Nintendo/Nintendo.yaml",
+        "rs-epic": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Epic/Epic.yaml",
+        "rs-steamcn": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/SteamCN/SteamCN.yaml",
+        "rs-steam": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Steam/Steam.yaml",
+        "rs-game": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Game/Game.yaml",
+        "rs-github": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/GitHub/GitHub.yaml",
+        "rs-microsoft": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Microsoft/Microsoft.yaml",
+        "rs-google": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Google/Google.yaml",
+        "rs-apple": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple.yaml",
+        "rs-bilibili": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BiliBili/BiliBili.yaml",
+        "rs-neteasemusic": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/NetEaseMusic/NetEaseMusic.yaml",
+        "rs-baidu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Baidu/Baidu.yaml",
+        "rs-douban": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouBan/DouBan.yaml",
+        "rs-wechat": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/WeChat/WeChat.yaml",
+        "rs-sina": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sina/Sina.yaml",
+        "rs-zhihu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Zhihu/Zhihu.yaml",
+        "rs-xiaohongshu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/XiaoHongShu/XiaoHongShu.yaml",
+        "rs-douyin": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouYin/DouYin.yaml",
+        "rs-tiktok": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/TikTok/TikTok.yaml",
+        "rs-global": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Global/Global.yaml",
+        "rs-china": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/China/China.yaml",
+        "rs-lan": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Lan/Lan.yaml"
+      }
+    },
+    {
+      "id": "lazy-group",
+      "name": "懒人配置（含策略组）",
+      "category": "懒人",
+      "description": "39 条规则 + AI、流媒体、游戏平台、微软谷歌苹果等 17 个独立分流组。",
+      "recommended": false,
+      "upstream_file": "lazy_group.conf",
+      "stats": {
+        "reject": 0,
+        "direct": 0,
+        "proxy": 0,
+        "custom_groups": 17,
+        "total_rules": 39
+      },
+      "config_url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/lazy-group/config.yaml",
+      "providers": {
+        "rs-ai": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/rulesets/rs-ai.yaml",
+        "rs-youtube": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/YouTube/YouTube.yaml",
+        "rs-netflix": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Netflix/Netflix.yaml",
+        "rs-disney": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Disney/Disney.yaml",
+        "rs-hbo": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/HBO/HBO.yaml",
+        "rs-spotify": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Spotify/Spotify.yaml",
+        "rs-telegram": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Telegram/Telegram.yaml",
+        "rs-paypal": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/PayPal/PayPal.yaml",
+        "rs-twitter": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Twitter/Twitter.yaml",
+        "rs-facebook": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Facebook/Facebook.yaml",
+        "rs-amazon": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Amazon/Amazon.yaml",
+        "rs-sony": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sony/Sony.yaml",
+        "rs-nintendo": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Nintendo/Nintendo.yaml",
+        "rs-epic": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Epic/Epic.yaml",
+        "rs-steamcn": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/SteamCN/SteamCN.yaml",
+        "rs-steam": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Steam/Steam.yaml",
+        "rs-game": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Game/Game.yaml",
+        "rs-github": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/GitHub/GitHub.yaml",
+        "rs-microsoft": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Microsoft/Microsoft.yaml",
+        "rs-google": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Google/Google.yaml",
+        "rs-apple": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple.yaml",
+        "rs-bilibili": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/BiliBili/BiliBili.yaml",
+        "rs-neteasemusic": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/NetEaseMusic/NetEaseMusic.yaml",
+        "rs-baidu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Baidu/Baidu.yaml",
+        "rs-douban": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouBan/DouBan.yaml",
+        "rs-wechat": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/WeChat/WeChat.yaml",
+        "rs-sina": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Sina/Sina.yaml",
+        "rs-zhihu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Zhihu/Zhihu.yaml",
+        "rs-xiaohongshu": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/XiaoHongShu/XiaoHongShu.yaml",
+        "rs-douyin": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/DouYin/DouYin.yaml",
+        "rs-tiktok": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/TikTok/TikTok.yaml",
+        "rs-global": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Global/Global.yaml",
+        "rs-china": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/China/China.yaml",
+        "rs-lan": "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Lan/Lan.yaml"
+      }
+    }
+  ],
+  "common": {
+    "adblock": {
+      "path": "common/adblock.yaml",
+      "entries": 54400,
+      "url": "https://raw.githubusercontent.com/LanConnor/Clash-ADBlock-Rules/dist/common/adblock.yaml",
+      "bytes": 2095349
+    }
+  },
+  "upstream_build_time": "UTC 2026-11-27 23:02:46"
+}
